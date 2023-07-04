@@ -13,6 +13,8 @@ Included in this repository are two Microsoft Sentinel resources to help you get
 - [Workbook MicrosoftSentinel-DomainMonitor](./Workbooks/MicrosoftSentinel-DomainMonitor/): A workbook that visualizes the data from the DomainMonitor.
 
 # Run with Azure Containers
+![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/h0ffayyy/SentinelDomainMonitor/docker-image.yml?logo=docker&logoColor=white&label=ContainerBuildStatus&labelColor=black)
+
 A Dockerfile has been provided to run this in an Azure Container Instance. 
 
 > **Note**
