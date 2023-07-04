@@ -1,0 +1,199 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "storageAccountType": {
+        "type": "string",
+        "allowedValues": [
+          "Premium_LRS",
+          "Premium_ZRS",
+          "Standard_GRS",
+          "Standard_GZRS",
+          "Standard_LRS",
+          "Standard_RAGRS",
+          "Standard_RAGZRS",
+          "Standard_ZRS"
+        ],
+        "metadata": {
+          "description": "Storage Account type"
+        },
+        "defaultValue": "Standard_LRS"
+      },
+      "location": {
+        "type": "string",
+        "metadata": {
+          "description": "The storage account location."
+        },
+        "defaultValue": "[resourceGroup().location]"
+      },
+      "storageAccountName": {
+        "type": "string",
+        "metadata": {
+          "description": "The name of the storage account"
+        },
+        "defaultValue": "[concat('store', uniqueString(resourceGroup().id))]"
+      },
+      "containerName": {
+        "type": "string",
+        "metadata": {
+          "description": "The name of the container instance"
+        },
+        "defaultValue": "domain-monitor"
+      },
+      "imageName": {
+        "type": "string",
+        "defaultValue": "h0ffayyy/sentinel-domain-monitor"
+      },
+      "imageTag": {
+        "type": "string",
+        "defaultValue": "v1"
+      },
+      "LogAnalyticsWorkspaceId": {
+        "type": "string"
+      },
+      "LogAnalyticsSharedKey": {
+        "type": "string"
+      },
+      "restartPolicy": {
+        "type": "string",
+        "allowedValues": [
+          "Always",
+          "Never",
+          "OnFailure"
+        ],
+        "metadata": {
+          "description": "The behavior of Azure runtime if container has stopped."
+        },
+        "defaultValue": "Never"
+      }
+    },
+    "resources": [
+      {
+        "type": "Microsoft.Storage/storageAccounts",
+        "apiVersion": "2022-09-01",
+        "name": "[parameters('storageAccountName')]",
+        "location": "[parameters('location')]",
+        "sku": {
+          "name": "[parameters('storageAccountType')]"
+        },
+        "kind": "StorageV2",
+        "properties": {}
+      },
+      {
+        "type": "Microsoft.Storage/storageAccounts/blobServices",
+        "apiVersion": "2021-06-01",
+        "name": "[concat(parameters('storageAccountName'), '/default')]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+        ],
+        "properties": {
+          "deleteRetentionPolicy": {
+            "enabled": true,
+            "days": 7
+          }
+        }
+      },
+      {
+        "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+        "apiVersion": "2021-06-01",
+        "name": "[concat(parameters('storageAccountName'), '/default/domainmonitor')]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default')]"
+        ]
+      },
+      {
+        "type": "Microsoft.ContainerInstance/containerGroups",
+        "apiVersion": "2021-07-01",
+        "name": "[parameters('containerName')]",
+        "location": "[parameters('location')]",
+        "identity": {
+          "type": "SystemAssigned"
+        },
+        "properties": {
+          "containers": [
+            {
+              "name": "[parameters('containerName')]",
+              "properties": {
+                "image": "[concat(parameters('imageName'), ':', parameters('imageTag'))]",
+                "resources": {
+                  "requests": {
+                    "cpu": 1,
+                    "memoryInGB": 1.5
+                  }
+                },
+                "environmentVariables": [
+                  {
+                    "name": "WORKSPACE_ID",
+                    "value": "[parameters('LogAnalyticsWorkspaceId')]"
+                  },
+                  {
+                    "name": "SHARED_KEY",
+                    "value": "[parameters('LogAnalyticsSharedKey')]"
+                  },
+                  {
+                    "name": "azure_storage_account",
+                    "value": "[parameters('storageAccountName')]"
+                  },
+                  {
+                    "name": "azure_storage_blob_name",
+                    "value": "domains.txt"
+                  },
+                  {
+                    "name": "azure_storage_container",
+                    "value": "domainmonitor"
+                  }
+                ],
+                "ports": [
+                  {
+                    "port": 80,
+                    "protocol": "TCP"
+                  }
+                ]
+              }
+            }
+          ],
+          "restartPolicy": "[parameters('restartPolicy')]",
+          "osType": "Linux",
+          "ipAddress": {
+            "type": "Public",
+            "ports": [
+              {
+                "port": 80,
+                "protocol": "TCP"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Microsoft.Authorization/roleAssignments",
+        "apiVersion": "2020-04-01-preview",
+        "name": "[guid(subscription().subscriptionId, parameters('containerName'), 'RoleAssignment')]",
+        "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+        "dependsOn": [
+          "[resourceId('Microsoft.ContainerInstance/containerGroups', parameters('containerName'))]",
+          "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+        ],
+        "properties": {
+          "principalId": "[reference(resourceId('Microsoft.ContainerInstance/containerGroups', parameters('containerName')), '2021-07-01', 'full').identity.principalId]",
+          "roleDefinitionId":"[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1')]",
+          "principalType": "ServicePrincipal"
+        }
+      }
+    ],
+    "outputs": {
+      "storageAccountName": {
+        "type": "string",
+        "value": "[parameters('storageAccountName')]"
+      },
+      "storageAccountId": {
+        "type": "string",
+        "value": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+      },
+      "containerName": {
+        "type": "string",
+        "value": "[parameters('containerName')]"
+      }
+    }
+  }
+  

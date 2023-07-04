@@ -1,0 +1,8 @@
+let lookback = ago(24h);
+let previous = DomainMonitor_CL
+| where TimeGenerated > ago(7d) and TimeGenerated < lookback 
+| summarize arg_max(TimeGenerated, *) by domain_s;
+DomainMonitor_CL
+| where TimeGenerated > ago(1h)
+| summarize arg_max(TimeGenerated, *) by domain_s
+| join kind=leftanti previous on domain_s
