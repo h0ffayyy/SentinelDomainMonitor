@@ -65,7 +65,15 @@
           "description": "The behavior of Azure runtime if container has stopped."
         },
         "defaultValue": "Never"
+      },
+      "PlaybookName": {
+        "defaultValue": "Manage-DomainMonitorContainer",
+        "type": "String"
       }
+    },
+    "variables": {
+      "AciConnectionName": "[concat('api-aci-', parameters('PlaybookName'))]",
+      "LogAnalyticsCollectorConnectionName": "[concat('api-loganalytics-', parameters('PlaybookName'))]"
     },
     "resources": [
       {
@@ -178,6 +186,140 @@
           "principalId": "[reference(resourceId('Microsoft.ContainerInstance/containerGroups', parameters('containerName')), '2021-07-01', 'full').identity.principalId]",
           "roleDefinitionId":"[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1')]",
           "principalType": "ServicePrincipal"
+        }
+      },
+      {
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('AciConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "properties": {
+          "displayName": "[variables('AciConnectionName')]",
+          "customParameterValues": {},
+          "api": {
+              "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/aci')]"
+          }
+        }
+      },
+      {
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('LogAnalyticsCollectorConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "properties": {
+          "displayName": "[variables('LogAnalyticsCollectorConnectionName')]",
+          "customParameterValues": {},
+          "api": {
+              "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+          }
+        }
+      },
+      {
+        "type": "Microsoft.Logic/workflows",
+        "apiVersion": "2017-07-01",
+        "name": "[parameters('PlaybookName')]",
+        "location": "[resourceGroup().location]",
+        "dependson": [
+          "[resourceId('Microsoft.Web/connections', variables('AciConnectionName'))]",
+          "[resourceId('Microsoft.Web/connections', variables('LogAnalyticsCollectorConnectionName'))]"
+        ],
+        "properties": {
+          "state": "Enabled",
+          "definition": {
+            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+              "$connections": {
+                "defaultValue": {},
+                "type": "Object"
+              }
+            },
+            "triggers": {
+                "Recurrence": {
+                    "recurrence": {
+                        "frequency": "Day",
+                        "interval": 1,
+                        "schedule": {
+                            "hours": [
+                                "10"
+                            ],
+                            "minutes": [
+                                0
+                            ]
+                        }
+                    },
+                    "evaluatedRecurrence": {
+                        "frequency": "Day",
+                        "interval": 1,
+                        "schedule": {
+                            "hours": [
+                                "10"
+                            ],
+                            "minutes": [
+                                0
+                            ]
+                        }
+                    },
+                    "type": "Recurrence"
+                }
+            },
+            "actions": {
+                "Send_Data": {
+                    "runAfter": {
+                        "Start_containers_in_a_container_group": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "ApiConnection",
+                    "inputs": {
+                        "body": "{\n\"event_type\": \"container status\",\n\"status\": \"container started\"\n}",
+                        "headers": {
+                            "Log-Type": "DomainMonitor"
+                        },
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                            }
+                        },
+                        "method": "post",
+                        "path": "/api/logs"
+                    }
+                },
+                "Start_containers_in_a_container_group": {
+                    "runAfter": {},
+                    "type": "ApiConnection",
+                    "inputs": {
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['aci']['connectionId']"
+                            }
+                        },
+                        "method": "post",
+                        "path": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.ContainerInstance/containerGroups/', parameters('ContainerName'),'/start')]",
+                        "queries": {
+                            "x-ms-api-version": "2019-12-01"
+                        }
+                    }
+                }
+            },
+            "outputs": {}
+          },
+          "parameters": {
+            "$connections": {
+              "value": {
+                "aci": {
+                  "connectionId": "[resourceId('Microsoft.Web/connections', variables('AciConnectionName'))]",
+                  "connectionName": "[variables('AciConnectionName')]",
+                  "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/aci')]"
+                },
+                "azureloganalyticsdatacollector": {
+                  "connectionId": "[resourceId('Microsoft.Web/connections', variables('LogAnalyticsCollectorConnectionName'))]",
+                  "connectionName": "[variables('LogAnalyticsCollectorConnectionName')]",
+                  "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                }
+              }
+            }
+          }
         }
       }
     ],
