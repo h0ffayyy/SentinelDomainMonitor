@@ -15,7 +15,7 @@ Included in this repository are two Microsoft Sentinel resources to help you get
 # Run with Azure Containers
 ![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/h0ffayyy/SentinelDomainMonitor/docker-image.yml?logo=docker&logoColor=white&label=ContainerBuildStatus&labelColor=black)
 
-A Dockerfile has been provided to run this in an Azure Container Instance. 
+A Dockerfile has been provided to run this in an Azure Container Instance. I also recommend deploying the solution using the provided [ARM template](#deploy-to-azure).
 
 > **Note**
 > Please note that running this in an Azure Container Instance with longer domains is pretty slow. For my website, `aaron-hoffmann.com`, it takes about an hour to complete. For reference, a one or two letter domain only takes a couple mintues, and google.com took about 10 minutes.
@@ -24,7 +24,9 @@ A Dockerfile has been provided to run this in an Azure Container Instance.
 
 For full details on getting started with Azure Container Instances, check out the [official documentation](https://learn.microsoft.com/azure/container-instances/container-instances-quickstart-portal).
 
-## ACI setup - Build the image yourself
+## ACI manual setup - Build the image yourself
+<details><summary>Exapnd</summary>
+
 1. Create an Azure Container Registry
 2. Log in to your registry: `az acr login --name <registry-name>`
 3. Clone the repository and cd to the directory: `cd SentinelDomainMonitor/`
@@ -32,30 +34,36 @@ For full details on getting started with Azure Container Instances, check out th
 5. After the image has been built, tag the image for your container registry: `docker tag sentinel-domain-monitor:v1 <registry-login-server>/sentinel-domain-monitor:v1`
 6. Push the image to the registry: `docker push <login-server>/sentinel-domain-monitor:v1`
 7. Once the image has been uploaded, create a container instance. You can use the default size of 1 vCPU and 1.5GB memory
-8. In the Advanced tab, ensure that you set the required environment variables.
-    - WORKSPACE_ID: your log analytics workspace ID
-    - SHARED_KEY: your log analytics workspace primary key
-    - azure_storage_account: the name of the storage account
-    - azure_storage_blob_name: the name of the blob that contains the domains to be monitored
-    - azure_storage_container: the name of the blob storage container
-9. Wait for the container run to complete, and verify you see events in the DomainMonitor_CL Log Analytics table
+8. Wait for the container run to complete, and verify you see events in the DomainMonitor_CL Log Analytics table
 
-## ACI setup - Use my DockerHub image
+</details>
+
+## ACI manual setup - Use my DockerHub image
+<details><summary>Exapnd</summary>
+
 1. Create a new container instance
 2. Under Image Source, select 'Other'
 3. Enter the value: `h0ffayyy/sentinel-domain-monitor:v1`
 4. Set OS type as Linux
 5. You can use the default size of 1 vCPU and 1.5GB memory
-6. In the Advanced tab, ensure that you set the required environment variables.
-    - WORKSPACE_ID: your log analytics workspace ID
-    - SHARED_KEY: your log analytics workspace primary key
-    - azure_storage_account: the name of the storage account
-    - azure_storage_blob_name: the name of the blob that contains the domains to be monitored
-    - azure_storage_container: the name of the blob storage container
-7. Wait for the container run to complete, and verify you see events in the DomainMonitor_CL Log Analytics table
+6. Wait for the container run to complete, and verify you see events in the DomainMonitor_CL Log Analytics table
+
+</details>
+
+## Environment variables
+When creating the container, set the following environment variables in the Advanced tab:
+- `WORKSPACE_ID`: your log analytics workspace ID
+- `SHARED_KEY`: your log analytics workspace primary key
+- `azure_storage_account`: the name of the storage account
+- `azure_storage_blob_name`: the name of the blob that contains the domains to be monitored
+- `azure_storage_container`: the name of the blob storage container
+
+## Configuring watched domains
+- If deploying using the provided ARM/Bicep template, place your watched domains in a text file named `domains.txt` and upload it to the blob storage container that was created.
+- If deploying manually, place your domains.txt file in the same directory as the Dockerfile and uncomment the line `#COPY domains.txt .`
 
 ## Optional - control container with a Logic App
-If you'd like to automatically start the container, an example logic app has been included.
+If you'd like to automatically start the container, an example [logic app](./Playbooks/Manage-DomainMonitorContainer/) has been included.
 The logic app is set to trigger once a day.
 
 # Run locally
@@ -82,8 +90,8 @@ To install, download the latest release and unzip the contents.
 Place the domains you want to monitor in the `domains.txt` file, one per line.
 
 Set the following environment variables:
-    - WORKSPACE_ID: your log analytics workspace ID
-    - SHARED_KEY: your log analytics workspace primary key
+* WORKSPACE_ID: your log analytics workspace ID
+* SHARED_KEY: your log analytics workspace primary key
 
 ## Logging
 SentinelDomainMonitor write logs locally to `logs/domain_monitor.log` in the container, and to Log Analytics under the table name "DomainMonitor_CL".
@@ -99,3 +107,9 @@ Deploy the entire solution, including workbooks and playbooks using the buttons 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fh0ffayyy%2FSentinelDomainMonitor%2Fmaster%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fh0ffayyy%2FSentinelDomainMonitor%2Fmaster%2Fazuredeploy.json)
+
+This template creates the following resources:
+* Azure Container Instance that points to my DockerHub image
+* Storage Account and Blob storage container
+* Role assignment providing container instance Azure Blob Storage Reader access to the storage account
+* Playbook
