@@ -1,0 +1,281 @@
+{
+    "version": "Notebook/1.0",
+    "items": [
+      {
+        "type": 1,
+        "content": {
+          "json": "# Domain Monitor Workbook\r\n\r\nUse this workbook to keep tabs on newly registered domains that look like your own."
+        },
+        "name": "text - 2"
+      },
+      {
+        "type": 9,
+        "content": {
+          "version": "KqlParameterItem/1.0",
+          "parameters": [
+            {
+              "id": "eeebc804-082a-4cd8-b0b4-eb02c1c9f78b",
+              "version": "KqlParameterItem/1.0",
+              "name": "original_domain",
+              "label": "Original Domain",
+              "type": 2,
+              "query": "DomainMonitor_CL\r\n| where original_domain_s !=\"\"\r\n| distinct original_domain_s\r\n| sort by original_domain_s desc",
+              "typeSettings": {
+                "additionalResourceOptions": []
+              },
+              "timeContext": {
+                "durationMs": 2592000000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "value": null
+            },
+            {
+              "id": "35bab66a-b80c-43ab-9ad6-45376af4a825",
+              "version": "KqlParameterItem/1.0",
+              "name": "TimeRange",
+              "type": 4,
+              "typeSettings": {
+                "selectableValues": [
+                  {
+                    "durationMs": 86400000
+                  },
+                  {
+                    "durationMs": 172800000
+                  },
+                  {
+                    "durationMs": 259200000
+                  },
+                  {
+                    "durationMs": 604800000
+                  },
+                  {
+                    "durationMs": 1209600000
+                  },
+                  {
+                    "durationMs": 2419200000
+                  },
+                  {
+                    "durationMs": 2592000000
+                  },
+                  {
+                    "durationMs": 5184000000
+                  },
+                  {
+                    "durationMs": 7776000000
+                  }
+                ],
+                "allowCustom": true
+              },
+              "timeContext": {
+                "durationMs": 2592000000
+              },
+              "value": {
+                "durationMs": 7776000000
+              }
+            }
+          ],
+          "style": "pills",
+          "queryType": 0,
+          "resourceType": "microsoft.operationalinsights/workspaces"
+        },
+        "name": "parameters - 1"
+      },
+      {
+        "type": 3,
+        "content": {
+          "version": "KqlItem/1.0",
+          "query": "DomainMonitor_CL\r\n| where event_type_s == \"result\"\r\n| extend TimeGenerated=whois_creation_date_t\r\n| where TimeGenerated {TimeRange}\r\n| where original_domain_s contains \"{original_domain}\"\r\n| project Domain=domain_s, Created=whois_creation_date_t, Expires=whois_expiration_date_t, Updated=whois_updated_date_t",
+          "size": 1,
+          "title": "Domains newly registered in the {TimeRange:label} (click row for more details)",
+          "exportFieldName": "Domain",
+          "exportParameterName": "selected_domain",
+          "queryType": 0,
+          "resourceType": "microsoft.operationalinsights/workspaces",
+          "visualization": "table",
+          "tileSettings": {
+            "showBorder": false
+          }
+        },
+        "customWidth": "50",
+        "name": "query - 0",
+        "styleSettings": {
+          "showBorder": true
+        }
+      },
+      {
+        "type": 3,
+        "content": {
+          "version": "KqlItem/1.0",
+          "query": "DomainMonitor_CL\r\n| where event_type_s == \"result\"\r\n| where original_domain_s != \"\"\r\n| summarize dcount(domain_s) by original_domain_s",
+          "size": 0,
+          "title": "Total lookalike domains by original domain",
+          "timeContextFromParameter": "TimeRange",
+          "queryType": 0,
+          "resourceType": "microsoft.operationalinsights/workspaces",
+          "visualization": "unstackedbar"
+        },
+        "customWidth": "50",
+        "name": "query - 3"
+      },
+      {
+        "type": 12,
+        "content": {
+          "version": "NotebookGroup/1.0",
+          "groupType": "editable",
+          "items": [
+            {
+              "type": 1,
+              "content": {
+                "json": "<div style=\"font-size: 2em;font-weight: 500;color: #black;text-shadow: 0 1px 1px #FFFFFF;\">Domain: {selected_domain}</div>\r\n<div style=\"border-bottom: 2px solid #FFF;background-color: #b5d5f5;height: 3px;margin: 0.5em 0px 1.5em;\"><span style=\"display: block;width: 50px;height: 2px;background-color: #007fff ;\"></span></div>"
+              },
+              "conditionalVisibility": {
+                "parameterName": "selected_domain",
+                "comparison": "isNotEqualTo"
+              },
+              "name": "text - 4"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "let nsrecord = DomainMonitor_CL\r\n| where event_type_s == \"result\"\r\n| where domain_s == \"{selected_domain}\"\r\n| summarize arg_max(TimeGenerated, *) by domain_s\r\n| where dns_ns_s!=\"\"\r\n| project [\"Record\"]=todynamic(dns_ns_s), Title=\"NS Record\"\r\n| mv-expand [\"Record\"];\r\nlet arecord = DomainMonitor_CL\r\n| where event_type_s == \"result\"\r\n| where domain_s == \"{selected_domain}\"\r\n| summarize arg_max(TimeGenerated, *) by domain_s\r\n| where dns_a_s!=\"\"\r\n| project [\"Record\"]=todynamic(dns_a_s), Title=\"A Record\"\r\n| mv-expand [\"Record\"];//[\"MX Records\"]=dns_mx_s\r\nlet mxrecord = DomainMonitor_CL\r\n| where event_type_s == \"result\"\r\n| where domain_s == \"{selected_domain}\"\r\n| summarize arg_max(TimeGenerated, *) by domain_s\r\n| where dns_mx_s!=\"\"\r\n| project [\"Record\"]=todynamic(dns_mx_s), Title=\"MX Record\"\r\n| mv-expand [\"Record\"];\r\nnsrecord\r\n| union arecord, mxrecord",
+                "size": 4,
+                "timeContextFromParameter": "TimeRange",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "Title",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "colors",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": null,
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  },
+                  "leftContent": {
+                    "columnMatch": "Record"
+                  },
+                  "showBorder": true,
+                  "size": "auto"
+                }
+              },
+              "name": "query - 4"
+            },
+            {
+              "type": 1,
+              "content": {
+                "json": "## Registrar info"
+              },
+              "name": "text - 2"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "DomainMonitor_CL\r\n| where event_type_s == \"result\"\r\n| where domain_s == \"{selected_domain}\"\r\n| summarize arg_max(TimeGenerated, *) by domain_s\r\n| project strcat(\"Registrar: \",whois_registrar_s)",
+                "size": 4,
+                "timeContextFromParameter": "TimeRange",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "Column1",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "colors",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": null,
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  },
+                  "showBorder": true,
+                  "size": "auto"
+                },
+                "mapSettings": {
+                  "locInfo": "LatLong"
+                }
+              },
+              "customWidth": "50",
+              "name": "query - 3"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "DomainMonitor_CL\r\n| where event_type_s == \"result\"\r\n| where domain_s == \"{selected_domain}\"\r\n| summarize arg_max(TimeGenerated, *) by domain_s\r\n| mv-expand todynamic(whois_emails_s)\r\n| project WHOIS_emails=whois_emails_s",
+                "size": 4,
+                "timeContext": {
+                  "durationMs": 2592000000
+                },
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "table",
+                "gridSettings": {
+                  "formatters": [
+                    {
+                      "columnMatch": "WHOIS_emails",
+                      "formatter": 18,
+                      "formatOptions": {
+                        "thresholdsOptions": "icons",
+                        "thresholdsGrid": [
+                          {
+                            "operator": "Default",
+                            "thresholdValue": null,
+                            "representation": "Mail",
+                            "text": "{0}{1}"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "whois_emails_s",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "Mail",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  },
+                  "showBorder": true,
+                  "size": "auto"
+                }
+              },
+              "customWidth": "50",
+              "name": "query - 1"
+            }
+          ]
+        },
+        "conditionalVisibility": {
+          "parameterName": "selected_domain",
+          "comparison": "isNotEqualTo"
+        },
+        "name": "domain info"
+      }
+    ],
+    "fromTemplateId": "sentinel-UserWorkbook",
+    "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+  }
